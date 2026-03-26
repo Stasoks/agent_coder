@@ -22,6 +22,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true", help="Enable debug mode with live trace window.")
     parser.add_argument("--model", type=str, default=None, help="Override model name.")
+    parser.add_argument("--quantization", type=str, choices=["4bit", "8bit", "none"], default="4bit",
+                        help="Quantization mode: 4bit (default), 8bit, or none")
     args, _unknown = parser.parse_known_args()
 
     app = QApplication(sys.argv)
@@ -30,7 +32,7 @@ def main() -> int:
 
     workspace_root = Path.cwd()
     model_name = args.model or (DEBUG_MODEL if args.debug else DEFAULT_MODEL)
-    window = MainWindow(workspace_root=workspace_root, model_name=model_name, debug_mode=args.debug)
+    window = MainWindow(workspace_root=workspace_root, model_name=model_name, debug_mode=args.debug, quantization_mode=args.quantization)
     window.resize(*DEFAULT_WINDOW_SIZE)
     suffix = " [DEBUG]" if args.debug else ""
     window.setWindowTitle(f"{APP_NAME}{suffix}")

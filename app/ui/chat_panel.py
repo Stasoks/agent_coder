@@ -70,7 +70,7 @@ class ChatPanel(QWidget):
         self.input.setFixedHeight(110)
 
         self.attach_list = QListWidget(self)
-        self.attach_list.setFixedHeight(100)
+        self.attach_list.setFixedHeight(30)
 
         self.attach_btn = QPushButton("+", self)
         self.attach_btn.setObjectName("tinyActionButton")

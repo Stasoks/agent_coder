@@ -27,7 +27,7 @@ from app.ui.terminal_panel import TerminalPanel
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, workspace_root: Path, model_name: str, debug_mode: bool = False) -> None:
+    def __init__(self, workspace_root: Path, model_name: str, debug_mode: bool = False, quantization_mode: str = "4bit") -> None:
         super().__init__()
         self.workspace_root = workspace_root
         self.debug_mode = debug_mode
@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         self._current_theme = Theme.DARK
         self._chat_streaming = False
 
-        self.llm_service = LlmService(model_name=model_name)
+        self.llm_service = LlmService(model_name=model_name, quantization_mode=quantization_mode)
         self.agent_executor = AgentActionExecutor(workspace_root)
         self.debug_window = DebugWindow() if debug_mode else None
         if self.debug_window is not None:
@@ -196,7 +196,7 @@ class MainWindow(QMainWindow):
         attached = self._collect_attached_files(file_paths)
         self._log_debug(f"Files: {', '.join(attached.keys())}", "CHAT")
 
-        worker = ChatWorker(self.llm_service, prompt, mode, attached, self)
+        worker = ChatWorker(self.llm_service, prompt, mode, attached, self.workspace_root, self)
         worker.finished_ok.connect(lambda result: self._on_chat_result(mode, result))
         worker.failed.connect(self._on_chat_failed)
         worker.progress.connect(self._on_worker_progress)
