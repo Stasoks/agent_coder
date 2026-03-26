@@ -4,3 +4,12 @@ build/
 .venv311/
 .venv311/
 .venv311gpu/
+*.log
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+*.whl
