@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build lua_ai_studio exe",
+			"type": "shell",
+			"command": "cmd",
+			"args": [
+				"/c",
+				"call .venv311gpu\\Scripts\\activate && pyinstaller --clean --noconfirm --windowed --name lua_ai_studio --collect-all transformers --collect-all tokenizers main.py"
+			],
+			"isBackground": false
+		}
+	]
+}

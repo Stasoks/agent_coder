@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import sys
 from pathlib import Path
 
+import torch
 from PySide6.QtWidgets import QApplication
 
 from app.core.settings import APP_NAME, APP_STYLE, DEBUG_MODEL, DEFAULT_MODEL, DEFAULT_WINDOW_SIZE
@@ -11,6 +13,12 @@ from app.ui.main_window import MainWindow
 
 
 def main() -> int:
+    # Clear GPU memory at startup
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true", help="Enable debug mode with live trace window.")
     parser.add_argument("--model", type=str, default=None, help="Override model name.")

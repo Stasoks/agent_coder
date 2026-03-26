@@ -12,7 +12,7 @@ from typing import Callable, Any
 
 import torch
 from PySide6.QtCore import QObject, QThread, Signal
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer, BitsAndBytesConfig
 
 from app.core.settings import DEFAULT_MODEL
 
@@ -57,6 +57,13 @@ class LlmService:
             if progress_callback is not None:
                 progress_callback("Model is already loaded.")
             return
+
+        # Clear GPU memory before loading
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.reset_peak_memory_stats()
+
         if progress_callback is not None:
             progress_callback(f"Loading tokenizer: {self.model_name}")
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
@@ -75,28 +82,74 @@ class LlmService:
         dtype = torch.float16 if use_cuda else torch.float32
         device_note = "CUDA" if use_cuda else "CPU"
         if progress_callback is not None:
-            progress_callback(f"Loading model weights: {self.model_name} ({device_note})")
+            progress_callback(f"Loading model weights: {self.model_name} ({device_note}) with 4-BIT quantization")
 
-        # Load model - maximize GPU usage
+        # Load model with 4-BIT quantization (extreme compression)
         if use_cuda:
-            # Try to load full model on GPU, fall back to auto if needed
+            # 4-bit NFT quantization - максимальное сжатие
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16,
+            )
             try:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name,
-                    torch_dtype=dtype,
-                    device_map="cuda",  # Load directly to GPU
-                    low_cpu_mem_usage=True,
-                )
-            except RuntimeError as e:
-                # If OOM, use auto distribution
                 if progress_callback is not None:
-                    progress_callback(f"GPU memory full ({str(e)[:60]}...), using auto distribution...")
+                    progress_callback("[Stage 1/3] Applying 4-BIT NF4 quantization config...")
+
+                if progress_callback is not None:
+                    progress_callback("[Stage 2/3] Loading model with extreme compression...")
+
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.model_name,
-                    torch_dtype=dtype,
+                    quantization_config=quantization_config,
                     device_map="auto",
                     low_cpu_mem_usage=True,
                 )
+
+                if progress_callback is not None:
+                    progress_callback("[Stage 3/3] 4-BIT quantization applied successfully!")
+
+            except RuntimeError as e:
+                if progress_callback is not None:
+                    progress_callback(f"[ERROR] 4-bit failed: {str(e)[:60]}... Trying 8-bit INT8...")
+
+                torch.cuda.empty_cache()
+                gc.collect()
+
+                # Fallback to 8-bit
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    bnb_8bit_use_double_quant=True,
+                    bnb_8bit_compute_dtype=torch.float16,
+                )
+
+                try:
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        quantization_config=quantization_config,
+                        device_map="auto",
+                        low_cpu_mem_usage=True,
+                    )
+                    if progress_callback is not None:
+                        progress_callback("[Fallback] 8-BIT INT8 quantization applied")
+                except:
+                    if progress_callback is not None:
+                        progress_callback("[Last Resort] Loading in float16 without quantization...")
+
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        torch_dtype=torch.float16,
+                        device_map="auto",
+                        low_cpu_mem_usage=True,
+                    )
+                    if progress_callback is not None:
+                        progress_callback("[WARNING] No quantization applied - float16 mode")
+
+            except Exception as e:
+                if progress_callback is not None:
+                    progress_callback(f"[CRITICAL] {str(e)[:100]}")
+                raise
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
