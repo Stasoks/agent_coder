@@ -4,3 +4,7 @@ torch>=2.5.0
 accelerate>=1.2.1
 safetensors>=0.5.2
 pyinstaller>=6.11.0
+bitsandbytes>=0.37.0
+triton-windows<3.5
+huggingface-hub>=0.17.0
+markdown>=3.5.0

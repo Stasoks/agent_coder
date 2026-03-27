@@ -22,7 +22,7 @@ from app.core.settings import DEFAULT_MODEL
 try:
     from gptqmodel import GPTQModel
     HAS_GPTQMODEL = True
-except ImportError:
+except (ImportError, ModuleNotFoundError, FileNotFoundError):
     HAS_GPTQMODEL = False
 
 # Setup logging to file
@@ -241,6 +241,18 @@ class LlmService:
                 progress_callback(msg)
             raise
 
+    def unload(self) -> None:
+        """Unload current model to free GPU memory for loading a new one."""
+        if self.model is not None or self.tokenizer is not None:
+            logger.info("Unloading model and tokenizer...")
+            self.model = None
+            self.tokenizer = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.reset_peak_memory_stats()
+            logger.info("Model unloaded successfully")
+
     def shutdown(self, progress_callback: Callable[[str], None] | None = None) -> None:
         if progress_callback is not None:
             progress_callback("Releasing model resources...")
@@ -317,13 +329,15 @@ class LlmService:
         else:
             system = (
                 "You are a helpful Lua programming assistant. "
-                "Explain code clearly, provide best practices, keep responses concise and helpful."
+                "Explain code clearly, provide best practices. "
+                "IMPORTANT: Keep responses SHORT and CONCISE - answer only what was asked, don't add extra information. "
+                "Use 1-3 sentences for explanations unless asked for more detail."
             )
 
         files_block = ""
 
-        # Add available workspace files
-        if workspace_root and mode == "agent":
+        # Add available workspace files for both agent and assistant
+        if workspace_root:
             try:
                 lua_files = list(workspace_root.glob("**/*.lua"))
                 txt_files = list(workspace_root.glob("**/*.txt"))

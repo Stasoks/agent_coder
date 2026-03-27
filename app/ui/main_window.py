@@ -24,6 +24,7 @@ from app.ui.debug_window import DebugWindow
 from app.ui.editor import LuaEditor
 from app.ui.file_panel import FilePanel
 from app.ui.terminal_panel import TerminalPanel
+from app.ui.settings_panel import SettingsPanel
 
 
 class MainWindow(QMainWindow):
@@ -96,6 +97,11 @@ class MainWindow(QMainWindow):
         theme_dark = tb.addAction("🌙 Dark")
         theme_dark.triggered.connect(lambda: self._set_theme(Theme.DARK))
 
+        tb.addSeparator()
+
+        settings = tb.addAction("⚙️ Settings")
+        settings.triggered.connect(self.open_settings)
+
     def choose_folder(self) -> None:
         selected = QFileDialog.getExistingDirectory(self, "Open folder", str(self.workspace_root))
         if not selected:
@@ -148,6 +154,49 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, title, result.message)
         else:
             QMessageBox.warning(self, title, result.message)
+
+    def open_settings(self) -> None:
+        # Check if settings tab already open
+        for i in range(self.editor_tabs.count()):
+            widget = self.editor_tabs.widget(i)
+            if isinstance(widget, SettingsPanel):
+                self.editor_tabs.setCurrentIndex(i)
+                return
+
+        # Create new settings panel
+        settings_panel = SettingsPanel(
+            parent=self,
+            current_model=self.llm_service.model_name,
+            current_theme=self._current_theme,
+            current_quantization=self.llm_service.quantization_mode,
+        )
+
+        # Connect signals
+        settings_panel.back_requested.connect(lambda: self._close_tab(self.editor_tabs.indexOf(settings_panel)))
+        settings_panel.apply_requested.connect(self._apply_settings_changes)
+
+        # Add as tab
+        idx = self.editor_tabs.addTab(settings_panel, "⚙️ Settings")
+        self.editor_tabs.setCurrentIndex(idx)
+
+    def _apply_settings_changes(self, model: str, theme: Theme, quantization: str) -> None:
+        """Apply settings changes from the settings panel."""
+        # Change theme if needed
+        if theme != self._current_theme:
+            self._set_theme(theme)
+
+        # Change model if needed
+        if model != self.llm_service.model_name:
+            self._log_debug(f"Model changed from {self.llm_service.model_name} to {model}", "INIT")
+            self.llm_service.model_name = model
+            self.llm_service.quantization_mode = quantization
+            self.llm_service.unload()
+            self.chat_panel.append_message("System", f"✓ Model switched to {model.split('/')[-1]}")
+        elif quantization != self.llm_service.quantization_mode:
+            self._log_debug(f"Quantization changed from {self.llm_service.quantization_mode} to {quantization}", "INIT")
+            self.llm_service.quantization_mode = quantization
+            self.llm_service.unload()
+            self.chat_panel.append_message("System", f"✓ Quantization mode switched to {quantization}")
 
     def _close_tab(self, index: int) -> None:
         widget = self.editor_tabs.widget(index)

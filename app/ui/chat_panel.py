@@ -11,10 +11,13 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QTextEdit,
+    QTextBrowser,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
+
+import markdown
 
 
 class AttachmentItemWidget(QWidget):
@@ -62,8 +65,11 @@ class ChatPanel(QWidget):
         self.mode = QComboBox(self)
         self.mode.addItems(["assistant", "agent"])
 
-        self.chat_history = QTextEdit(self)
-        self.chat_history.setReadOnly(True)
+        self.chat_history = QTextBrowser(self)
+        self.chat_history.setOpenExternalLinks(False)
+
+        # Store raw messages for markdown rendering
+        self._messages: list[tuple[str, str]] = []  # (role, text)
 
         self.input = QTextEdit(self)
         self.input.setPlaceholderText("Write your request...")
@@ -112,22 +118,46 @@ class ChatPanel(QWidget):
         layout.addLayout(bottom)
 
     def append_message(self, role: str, text: str, is_streaming: bool = False) -> None:
-        """Append message to chat history."""
-        cursor = self.chat_history.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        self.chat_history.setTextCursor(cursor)
-
+        """Append message to chat history with markdown formatting."""
         if is_streaming:
-            self.chat_history.insertPlainText(f"{role}: ")
+            # Start new message for streaming
+            self._messages.append((role, ""))
         else:
-            self.chat_history.insertPlainText(f"{role}: {text}\n")
+            # Add complete message
+            self._messages.append((role, text))
+            self._render_chat()
 
     def append_stream_token(self, token: str) -> None:
-        """Append a single token as streaming output."""
-        cursor = self.chat_history.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        self.chat_history.setTextCursor(cursor)
-        self.chat_history.insertPlainText(token)
+        """Append a single token to the last message."""
+        if self._messages:
+            role, text = self._messages[-1]
+            self._messages[-1] = (role, text + token)
+            self._render_chat()
+
+    def _render_chat(self) -> None:
+        """Render all messages as formatted HTML with markdown support."""
+        html_parts = []
+        for role, text in self._messages:
+            # Format role header simply
+            role_html = f'<span style="font-weight: bold;">{role}:</span>'
+
+            # Escape HTML and convert markdown
+            text_escaped = text.replace("<", "&lt;").replace(">", "&gt;")
+            try:
+                text_html = markdown.markdown(text_escaped, extensions=["tables", "fenced_code"])
+            except Exception:
+                text_html = text_escaped
+
+            # Add minimal styling
+            text_html = f'<div style="margin: 6px 0; line-height: 1.4;">{role_html}<br/>{text_html}</div>'
+            html_parts.append(text_html)
+
+        # Combine and set
+        final_html = '<div style="white-space: pre-wrap;">' + "".join(html_parts) + "</div>"
+        self.chat_history.setHtml(final_html)
+
+        # Scroll to bottom
+        self.chat_history.verticalScrollBar().setValue(self.chat_history.verticalScrollBar().maximum())
 
     def _attach_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(self, "Attach file")

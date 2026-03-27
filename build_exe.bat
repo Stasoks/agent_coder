@@ -8,7 +8,7 @@ if not exist .venv311gpu (
 call .venv311gpu\Scripts\activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install --no-cache-dir torch==2.11.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
